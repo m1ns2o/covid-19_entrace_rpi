@@ -10,12 +10,14 @@ import pygame
 
 pygame.init()
 
-beep = pygame.mixer.Sound("beep.wav")
+beep = pygame.mixer.Sound('beep.wav')
+clear = pygame.mixer.Sound('clear.wav')
+alert = pygame.mixer.Sound('alert.wav')
 
 i2c = io.I2C(board.SCL, board.SDA, frequency=100000)
 mlx = adafruit_mlx90614.MLX90614(i2c)
 
-URL = ''#server req
+URL = ' /check-inspection'#server req
 
 pin = 18 #servo
 
@@ -34,10 +36,8 @@ p.start(0)
 cap = cv2.VideoCapture(0)
 
 #camera resolution
-cap.set(3,320)
-cap.set(4,240)
-
-student_id = 0
+cap.set(3,640)
+cap.set(4,480)
 
 def distance():
     GPIO.output(trig, False)
@@ -58,36 +58,25 @@ def distance():
     return d
 
 def check_id(qr_data):
-    data = {'qr': qr_data}
+    data = {'qstnCrtfcNoEncpt': qr_data, 'temp': ''}
     res = requests.post(URL, data=data)
-    #res.status_code # 200
     if res.status_code == 200:
-        student_id = res['id']
         return True
     else:
         return False
 
-def send_temp(qr_data):
-    print('Ambent temp:', mlx.ambient_temperature)
-    print('obj temp:', mlx.object_temperature)
-    temp = mlx.object_temperature
-    data = {'id' : student_id, 'temp' : temp}
-    #requests.post(URL, data=data)
-    print(data)
-    return temp
+def send_temp(qr_data, temp):
+#    temp = mlx.object_temperature
+    data = {'qstnCrtfcNoEncpt' : qr_data, 'temp' : temp}
+    requests.post(URL, data=data)
+    #return temp
 
-def servo_move():
-    p.ChangeDutyCycle(1)
-    #time.sleep(0.05)
-    p.ChangeDutyCycle(5)
 
 
 
 
 #-------------set----------------
 init_distance = distance()
-
-
 
 while(cap.isOpened()):
     ret, img = cap.read()
@@ -99,9 +88,10 @@ while(cap.isOpened()):
 
     decoded = pyzbar.decode(gray)
 
-    beep.play()
+
 
     for d in decoded:
+
         x, y, w, h = d.rect
 
         barcode_data = d.data.decode("utf-8")
@@ -109,15 +99,21 @@ while(cap.isOpened()):
 
         text = '%s (%s)' % (barcode_data, barcode_type)
 
+        beep.play()
+
         if check_id(text):
             while(True):
                 if (init_distance - distance()) > 3: # hand detect
-                    if send_temp() > 35:
-                        #play sound alert
-                    #else:
-                        # play sound ok
+                    t = bool(mlx.object_temperature < 33)
+                    if t:
+                        clear.play()
+                    else:
+                        alert.play()
+                    send_temp(text, t)
 
-                    servo_move()
+                    p.ChangeDutyCycle(1)
+                    # time.sleep(0.05)
+                    p.ChangeDutyCycle(5)
                     break
 
     cv2.imshow('img', img)
