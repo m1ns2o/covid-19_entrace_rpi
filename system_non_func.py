@@ -17,7 +17,7 @@ alert = pygame.mixer.Sound('alert.wav')
 i2c = io.I2C(board.SCL, board.SDA, frequency=100000)
 mlx = adafruit_mlx90614.MLX90614(i2c)
 
-URL = ' /check-inspection'#server req
+URL = 'https://api.andy0414.com/check-inspection'#server req
 
 pin = 18 #servo
 
@@ -36,8 +36,8 @@ p.start(0)
 cap = cv2.VideoCapture(0)
 
 #camera resolution
-cap.set(3,640)
-cap.set(4,480)
+cap.set(3,320)
+cap.set(4,240)
 
 def distance():
     GPIO.output(trig, False)
@@ -58,12 +58,10 @@ def distance():
     return d
 
 def check_id(qr_data):
-    data = {'qstnCrtfcNoEncpt': qr_data, 'temp': ''}
+    data = {'qstnCrtfcNoEncpt': 'asdfsadfsadf', 'temp': ''}
     res = requests.post(URL, data=data)
-    if res.status_code == 200:
-        return True
-    else:
-        return False
+    print(res['result'])
+    return res.json()['result']
 
 def send_temp(qr_data, temp):
 #    temp = mlx.object_temperature
@@ -88,8 +86,6 @@ while(cap.isOpened()):
 
     decoded = pyzbar.decode(gray)
 
-
-
     for d in decoded:
 
         x, y, w, h = d.rect
@@ -101,20 +97,24 @@ while(cap.isOpened()):
 
         beep.play()
 
-        if check_id(text):
-            while(True):
-                if (init_distance - distance()) > 3: # hand detect
-                    t = bool(mlx.object_temperature < 33)
-                    if t:
-                        clear.play()
-                    else:
-                        alert.play()
-                    send_temp(text, t)
+        try:
+            if check_id(text):
+                while (True):
+                    if (init_distance - distance()) > 3:  # hand detect
+                        t = bool(mlx.object_temperature < 33)
+                        if t:
+                            clear.play()
+                        else:
+                            alert.play()
+                        send_temp(text, t)
+                        break
+        except:
+            print('Authenticate failed')
 
-                    p.ChangeDutyCycle(1)
-                    # time.sleep(0.05)
-                    p.ChangeDutyCycle(5)
-                    break
+        p.ChangeDutyCycle(1)
+        # time.sleep(0.05)
+        p.ChangeDutyCycle(5)
+
 
     cv2.imshow('img', img)
     key = cv2.waitKey(1)
